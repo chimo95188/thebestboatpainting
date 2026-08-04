@@ -1,6 +1,12 @@
 (function () {
   "use strict";
 
+  var REVIEWS_CONFIG = {
+    repo: "chimo95188/thebestboatpainting",
+    token: "",
+    marker: "[REVIEW]"
+  };
+
   var I18N = {
     es: {
       "topbar.hours": "Lun–Vie 11 AM–7 PM · Sáb–Dom 11 AM–5 PM",
@@ -73,7 +79,7 @@
       "review.msg": "Tu reseña *",
       "review.msgPh": "Cuéntanos cómo fue tu experiencia...",
       "review.send": "Publicar reseña",
-      "review.hint": "Tu reseña se agrega al instante a esta lista y también se envía a nuestro correo para confirmar el envío.",
+      "review.hint": "Tu reseña se guarda y queda publicada en esta página para que todos la vean.",
       "review.success": "¡Gracias! Tu reseña fue publicada.",
       "contact.tag": "Contacto",
       "contact.title": "¿Listo para hablar de color?",
@@ -171,7 +177,7 @@
       "review.msg": "Your review *",
       "review.msgPh": "Tell us how your experience went...",
       "review.send": "Publish review",
-      "review.hint": "Your review appears instantly on this list and is also sent to our inbox for confirmation.",
+      "review.hint": "Your review is saved and published on this page for everyone to see.",
       "review.success": "Thank you! Your review was published.",
       "contact.tag": "Contact",
       "contact.title": "Ready to talk about color?",
@@ -332,6 +338,61 @@
     return out;
   }
 
+  function addReviewCard(name, location, rating, text) {
+    var card = document.createElement("article");
+    card.className = "card card--testimonial";
+    var who = location
+      ? '<footer class="card__who"><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(location) + "</span></footer>"
+      : '<footer class="card__who"><strong>' + escapeHtml(name) + "</strong></footer>";
+    card.innerHTML =
+      '<div class="stars">' + starSvg(rating) + "</div>" +
+      '<p class="card__text">"' + escapeHtml(text) + '"</p>' + who;
+    document.getElementById("testimonialsGrid").prepend(card);
+  }
+
+  function postReview(name, location, rating, text) {
+    var title = REVIEWS_CONFIG.marker + " " + name + (location ? " | " + location : "");
+    var body = "Calificación: " + rating + "/5\n\n" + text;
+    return fetch("https://api.github.com/repos/" + REVIEWS_CONFIG.repo + "/issues", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + REVIEWS_CONFIG.token
+      },
+      body: JSON.stringify({ title: title, body: body })
+    });
+  }
+
+  function parseReviewTitle(title) {
+    var rest = title.substring(REVIEWS_CONFIG.marker.length).trim();
+    var sep = rest.indexOf("|");
+    if (sep !== -1) {
+      return { name: rest.substring(0, sep).trim(), location: rest.substring(sep + 1).trim() };
+    }
+    return { name: rest, location: "" };
+  }
+
+  function loadReviews() {
+    fetch("https://api.github.com/repos/" + REVIEWS_CONFIG.repo + "/issues?state=all&per_page=100")
+      .then(function (res) { return res.json(); })
+      .then(function (issues) {
+        if (!Array.isArray(issues)) return;
+        for (var i = issues.length - 1; i >= 0; i--) {
+          var issue = issues[i];
+          if (!issue.title || issue.title.indexOf(REVIEWS_CONFIG.marker) !== 0) continue;
+          var who = parseReviewTitle(issue.title);
+          var lines = String(issue.body || "").split("\n");
+          var rating = 5;
+          var match = lines.length ? /Calificación:\s*(\d+)\s*\/\s*5/i.exec(lines[0]) : null;
+          if (match) rating = parseInt(match[1], 10);
+          if (rating < 1 || rating > 5) rating = 5;
+          var text = lines.slice(1).join("\n").trim() || lines.join("\n").trim();
+          addReviewCard(who.name, who.location, rating, text);
+        }
+      })
+      .catch(function () {});
+  }
+
   var reviewForm = document.getElementById("reviewForm");
   var reviewSuccess = document.getElementById("reviewSuccess");
 
@@ -343,31 +404,41 @@
     var ratingVal = parseInt(reviewForm.elements.revStars.value, 10) || 5;
     if (!name || !text) return;
 
-    var card = document.createElement("article");
-    card.className = "card card--testimonial";
-    var who = location
-      ? '<footer class="card__who"><strong>' + escapeHtml(name) + '</strong><span>' + escapeHtml(location) + "</span></footer>"
-      : '<footer class="card__who"><strong>' + escapeHtml(name) + "</strong></footer>";
-    card.innerHTML =
-      '<div class="stars">' + starSvg(ratingVal) + "</div>" +
-      '<p class="card__text">"' + escapeHtml(text) + '"</p>' + who;
-    document.getElementById("testimonialsGrid").prepend(card);
+    function done() {
+      reviewSuccess.hidden = false;
+      setTimeout(function () { reviewSuccess.hidden = true; }, 6000);
+      reviewForm.reset();
+      setRating(5);
+    }
 
-    reviewSuccess.hidden = false;
-    setTimeout(function () { reviewSuccess.hidden = true; }, 6000);
-
-    var subject = "Nueva reseña - " + name;
-    var body =
-      "Nombre: " + name + "\n" +
-      "Ubicación: " + (location || "-") + "\n" +
-      "Calificación: " + ratingVal + "/5\n\n" +
-      "Reseña:\n" + text;
-    window.location.href =
-      "mailto:info@bestboatpainting.com" +
-      "?subject=" + encodeURIComponent(subject) +
-      "&body=" + encodeURIComponent(body);
-
-    reviewForm.reset();
-    setRating(5);
+    if (REVIEWS_CONFIG.token) {
+      addReviewCard(name, location, ratingVal, text);
+      postReview(name, location, ratingVal, text)
+        .then(function (res) {
+          if (!res.ok) throw new Error(res.status);
+          done();
+        })
+        .catch(function () {
+          document.getElementById("testimonialsGrid").removeChild(document.getElementById("testimonialsGrid").firstChild);
+          alert("No se pudo guardar la reseña. Intenta de nuevo.");
+          reviewForm.reset();
+          setRating(5);
+        });
+    } else {
+      addReviewCard(name, location, ratingVal, text);
+      done();
+      var subject = "Nueva reseña - " + name;
+      var body =
+        "Nombre: " + name + "\n" +
+        "Ubicación: " + (location || "-") + "\n" +
+        "Calificación: " + ratingVal + "/5\n\n" +
+        "Reseña:\n" + text;
+      window.location.href =
+        "mailto:info@bestboatpainting.com" +
+        "?subject=" + encodeURIComponent(subject) +
+        "&body=" + encodeURIComponent(body);
+    }
   });
+
+  loadReviews();
 })();
