@@ -102,6 +102,7 @@
       "contact.msgPh": "Cuéntanos sobre tu proyecto...",
       "contact.send": "Enviar mensaje",
       "contact.hint": "También puedes llamarnos o escribirnos por WhatsApp para una respuesta más rápida.",
+      "contact.success": "¡Gracias! Tu mensaje fue enviado con éxito. Te contactaremos pronto.",
       "contact.tel": "Teléfono",
       "contact.mail": "Correo",
       "contact.addr": "Ubicación",
@@ -200,6 +201,7 @@
       "contact.msgPh": "Tell us about your project...",
       "contact.send": "Send message",
       "contact.hint": "You can also call or message us on WhatsApp for a faster reply.",
+      "contact.success": "Thank you! Your message was sent successfully. We'll get back to you soon.",
       "contact.tel": "Phone",
       "contact.mail": "Email",
       "contact.addr": "Location",
@@ -274,20 +276,41 @@
   document.getElementById("year").textContent = new Date().getFullYear();
 
   var form = document.getElementById("contactForm");
+  var contactSuccess = document.getElementById("contactSuccess");
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var f = form.elements;
-    var subject = "Solicitud de cotización - " + (f.firstName.value + " " + f.lastName.value).trim();
-    var body =
-      "Nombre: " + f.firstName.value + " " + f.lastName.value + "\n" +
-      "Correo: " + f.email.value + "\n" +
-      "Teléfono: " + f.phone.value + "\n\n" +
-      "Mensaje:\n" + f.message.value;
-    var href =
-      "mailto:info@bestboatpainting.com" +
-      "?subject=" + encodeURIComponent(subject) +
-      "&body=" + encodeURIComponent(body);
-    window.location.href = href;
+    var payload = {
+      access_key: "e3df11ad-5de3-42c1-b63b-965fa4cdcb8a",
+      subject: "Solicitud de cotización - " + (f.firstName.value + " " + f.lastName.value).trim(),
+      name: (f.firstName.value + " " + f.lastName.value).trim(),
+      email: f.email.value,
+      phone: f.phone.value,
+      message: f.message.value
+    };
+    var btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    fetch("https://api.web3forms.com/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) { return res.json(); })
+      .then(function (data) {
+        if (data.success) {
+          contactSuccess.hidden = false;
+          form.reset();
+          setTimeout(function () { contactSuccess.hidden = true; }, 8000);
+        } else {
+          throw new Error(data.message || "Error");
+        }
+      })
+      .catch(function () {
+        alert("No se pudo enviar el mensaje. Intenta de nuevo.");
+      })
+      .finally(function () {
+        btn.disabled = false;
+      });
   });
 
   var ratingBox = document.getElementById("rating");
