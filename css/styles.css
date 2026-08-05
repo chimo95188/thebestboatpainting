@@ -92,13 +92,10 @@ ul { list-style: none; }
   min-width: 0;
 }
 .nav__logo {
-  display: grid;
-  place-items: center;
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: var(--primary);
-  color: #fff;
+  object-fit: cover;
   flex-shrink: 0;
 }
 .nav__name {
