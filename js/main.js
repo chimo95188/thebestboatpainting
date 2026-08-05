@@ -11,6 +11,8 @@
     appId: "1:992915828327:web:2f32ebf03fc60d58986ec2"
   };
 
+  firebase.initializeApp(FIREBASE_CONFIG);
+
   var I18N = {
     es: {
       "topbar.hours": "Lun–Vie 11 AM–7 PM · Sáb–Dom 11 AM–5 PM",
